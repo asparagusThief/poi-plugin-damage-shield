@@ -1,0 +1,21 @@
+{
+  "name": "poi-plugin-damage-shield",
+  "version": "0.1.1",
+  "description": "在舰船中破／大破立绘动画播放期间遮挡整个游戏画面。",
+  "main": "index.js",
+  "license": "MIT",
+  "files": ["index.js", "src", "README.md", "LICENSE"],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check index.js && node --check src/game-shield.js && node --check src/controller.js",
+    "pack:local": "npm pack --ignore-scripts --cache .npm-cache --pack-destination dist"
+  },
+  "poiPlugin": {
+    "name": "破损动画遮挡",
+    "id": "damage-shield",
+    "description": "中破／大破立绘动画播放期间自动遮挡整个游戏画面，播放结束后恢复。",
+    "icon": "fa/shield",
+    "earliestCompatibleMain": "12.0.1",
+    "priority": 100
+  }
+}
