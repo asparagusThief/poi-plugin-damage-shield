@@ -74,3 +74,119 @@ test('a new webview replaces event listeners and disposes the previous game hook
   assert.equal(replacement.handlers.size, 2)
   await f.controller.stop()
 })
+
+test('startup publishes loading immediately, before a webview injection can resolve', async () => {
+  const f = fixture()
+  f.setView(f.view)
+  const updates = []
+  f.controller.subscribe(status => updates.push(status))
+  let resolve
+  f.view.executeJavaScript = script => {
+    f.view.calls.push(script)
+    return script.includes(')("dispose",') ? Promise.resolve([]) : new Promise(done => { resolve = done })
+  }
+  f.controller.start()
+  assert.ok(updates.length > 0)
+  assert.equal(updates[0].message, '等待游戏画面')
+  assert.equal(updates[0].canTest, false)
+  assert.equal(await f.controller.test(), false)
+  assert.match(f.controller.snapshot.message, /正在加载/)
+  assert.equal(f.view.calls.length, 1)
+  resolve([{ hooks: 2, renderCount: 1, animationCount: 0 }])
+  await new Promise(setImmediate)
+  assert.equal(f.controller.snapshot.canTest, true)
+  await f.controller.stop()
+})
+
+test('live game frames connect and accept tests while the whole page and an advertisement are still loading', async () => {
+  const f = fixture()
+  let finishRoot, finishAd
+  const root = { calls: [], executeJavaScript(script) {
+    this.calls.push(script)
+    return script.includes(')("dispose",') ? Promise.resolve([]) : new Promise(resolve => { finishRoot = resolve })
+  } }
+  const ad = { calls: [], executeJavaScript(script) {
+    this.calls.push(script)
+    return script.includes(')("dispose",') ? Promise.resolve([]) : new Promise(resolve => { finishAd = resolve })
+  } }
+  const game = { calls: [], async executeJavaScript(script) {
+    this.calls.push(script)
+    return [{ hooks: 2, renderCount: 10, animationCount: 0, covered: false }]
+  } }
+  root.framesInSubtree = [root, ad, game]
+  f.view.getWebContents = () => ({ mainFrame: root })
+  f.view.executeJavaScript = () => { throw new Error('whole-page API must not be used') }
+  f.setView(f.view)
+  f.controller.start()
+  await new Promise(setImmediate)
+  assert.equal(f.controller.snapshot.canTest, true)
+  assert.equal(f.controller.snapshot.frames.length, 1)
+  assert.match(game.calls[0], /"singleFrame":true/)
+  await f.tick(); await f.tick()
+  assert.equal(root.calls.length, 1)
+  assert.equal(ad.calls.length, 1)
+  assert.equal(await f.controller.test(), true)
+  assert.ok(game.calls.some(script => script.includes(')("test",')))
+  const stopping = f.controller.stop()
+  finishRoot([]); finishAd([])
+  await stopping
+})
+
+test('a stalled old webview cannot block a replacement or overwrite its newer status', async () => {
+  const f = fixture()
+  let finishOld
+  f.view.executeJavaScript = script => {
+    f.view.calls.push(script)
+    return script.includes(')("dispose",') ? Promise.resolve([]) : new Promise(resolve => { finishOld = resolve })
+  }
+  f.setView(f.view)
+  f.controller.start()
+  const replacement = {
+    calls: [], addEventListener() {}, removeEventListener() {},
+    async executeJavaScript(script) {
+      this.calls.push(script)
+      return [{ hooks: 2, renderCount: 5, animationCount: 0, covered: false }]
+    },
+  }
+  f.setView(replacement)
+  await f.tick()
+  assert.equal(f.controller.snapshot.message, '自动遮挡已就绪')
+  finishOld([{ hooks: 2, renderCount: 50, animationCount: 20, covered: true }])
+  await new Promise(setImmediate)
+  assert.equal(f.controller.snapshot.message, '自动遮挡已就绪')
+  const oldOwner = f.view.calls[0].match(/"owner":"([^"]+)"/)[1]
+  const newOwner = replacement.calls[0].match(/"owner":"([^"]+)"/)[1]
+  assert.notEqual(oldOwner, newOwner)
+  assert.match(f.view.calls.at(-1), /\)\("dispose",/)
+  assert.ok(f.view.calls.at(-1).includes(oldOwner))
+  await f.controller.stop()
+})
+
+test('store ref changes connect immediately and polling slows only after a rendered game frame', async () => {
+  let view = null, notify, timer, unsubscribed = false
+  const delays = []
+  const controller = new ShieldController({
+    getStore: () => view,
+    config: { get: () => true, set() {} },
+    store: { subscribe(callback) { notify = callback; return () => { unsubscribed = true } } },
+    clock: { setInterval(fn, delay) { timer = fn; delays.push(delay); return 1 }, clearInterval() { timer = null } },
+  })
+  controller.start()
+  assert.equal(delays.at(-1), 250)
+  let hasRendered = false
+  view = { calls: [], async executeJavaScript(script) {
+    this.calls.push(script)
+    return [{ hooks: 2, renderCount: hasRendered ? 1 : 0 }]
+  } }
+  notify()
+  assert.equal(view.calls.length, 1)
+  await controller.pending
+  assert.equal(controller.snapshot.canTest, false)
+  assert.equal(delays.at(-1), 250)
+  hasRendered = true
+  await timer()
+  assert.equal(controller.snapshot.canTest, true)
+  assert.equal(delays.at(-1), 1000)
+  await controller.stop()
+  assert.equal(unsubscribed, true)
+})

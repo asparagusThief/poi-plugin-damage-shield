@@ -226,3 +226,25 @@ test('a detection error cannot interrupt game rendering or remove an existing sh
   renderer.render(stage)
   assert.equal(env.run()[0].covered, false)
 })
+
+test('installs the renderer hook before the game canvas exists', () => {
+  const env = environment()
+  env.doc.querySelector = () => null
+  const status = env.run()[0]
+  assert.ok(status.hooks > 0)
+  assert.equal(status.renderCount, 0)
+  const renderer = new env.Renderer(), stage = new env.Container()
+  stage.addChild(env.damageView())
+  renderer.render(stage)
+  assert.equal(env.run()[0].covered, true)
+})
+
+test('native frame mode does not traverse and double-count sibling or child game frames', () => {
+  const env = environment()
+  const parent = { frames: [env.win] }
+  const context = vm.createContext({ window: parent, Date })
+  const results = vm.runInContext(`(${runInGameFrames.toString()})('sync',{owner:'native',singleFrame:true})`, context)
+  assert.equal(results.length, 0)
+  assert.equal(env.win.__poiDamageShieldV1, undefined)
+  assert.equal(env.run('sync', { owner: 'native', singleFrame: true }).length, 1)
+})

@@ -15,7 +15,7 @@ function runInGameFrames(command, options) {
         if (win[slot] && win[slot].owner === options.owner) win[slot].dispose()
       } else {
         const pixi = win.PIXI
-        if (pixi && pixi.Graphics && win.document.querySelector('canvas')) {
+        if (pixi && pixi.Graphics) {
           if (win[slot] && win[slot].owner !== options.owner) win[slot].dispose()
           if (!win[slot]) install(win, pixi)
           const state = win[slot]
@@ -31,9 +31,11 @@ function runInGameFrames(command, options) {
     }
     // poi 12.0.1 disables web security for this webview, as its own canvas
     // capture does. If a frame is inaccessible, leave it alone and retry later.
-    try {
-      for (let i = 0; i < win.frames.length; i++) visit(win.frames[i])
-    } catch (_) {}
+    if (!options.singleFrame) {
+      try {
+        for (let i = 0; i < win.frames.length; i++) visit(win.frames[i])
+      } catch (_) {}
+    }
   }
 
   function install(win, pixi) {

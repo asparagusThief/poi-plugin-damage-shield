@@ -1,6 +1,6 @@
 {
   "name": "poi-plugin-damage-shield",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "在舰船中破／大破立绘动画播放期间遮挡整个游戏画面。",
   "main": "index.js",
   "license": "MIT",

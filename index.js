@@ -4,13 +4,13 @@ const React = require('react')
 const { ShieldController } = require('./src/controller')
 let controller = null
 const subscribers = new Set()
-let latest = { message: '插件尚未启动', frames: [], enabled: true }
+let latest = { message: '正在启动插件', frames: [], enabled: true, canTest: false }
 
 exports.pluginDidLoad = function pluginDidLoad() {
   if (controller) return
-  const { getStore } = require('views/create-store')
+  const { getStore, store } = require('views/create-store')
   const { config } = require('views/env')
-  controller = new ShieldController({ getStore, config })
+  controller = new ShieldController({ getStore, config, store })
   controller.subscribe(snapshot => {
     latest = snapshot
     for (const listener of subscribers) listener(snapshot)
@@ -27,6 +27,9 @@ exports.reactClass = function DamageShieldPanel() {
   const [status, setStatus] = React.useState(latest)
   React.useEffect(() => {
     subscribers.add(setStatus)
+    // Opening the panel also ensures initialization if poi mounts it before
+    // the lifecycle callback; pluginDidLoad is idempotent.
+    exports.pluginDidLoad()
     setStatus(latest)
     return () => subscribers.delete(setStatus)
   }, [])
@@ -38,7 +41,9 @@ exports.reactClass = function DamageShieldPanel() {
     h('p', { role: 'status' }, status.enabled ? status.message : '自动遮挡已暂停'),
     h('p', null, `本次游戏加载已识别 ${count} 次破损动画。`),
     h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
-      h('button', { className: 'bp6-button', onClick: () => controller && controller.test() }, '测试黑幕（3 秒）'),
+      h('button', { className: 'bp6-button', disabled: !status.canTest,
+        title: status.canTest ? '预览 3 秒遮挡效果' : '游戏画面加载完成后即可测试',
+        onClick: () => controller && controller.test() }, '测试黑幕（3 秒）'),
       h('button', { className: 'bp6-button', onClick: () => controller && controller.setEnabled(!status.enabled) },
         status.enabled ? '暂停自动遮挡' : '启用自动遮挡')),
     h('p', { style: { opacity: 0.8 } }, '可使用“测试黑幕”预览 3 秒遮挡效果。'),
