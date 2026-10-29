@@ -28,10 +28,10 @@ function fixture() {
 test('waits for a game, injects after its webview appears, and reports actual renderer readiness', async () => {
   const f = fixture()
   f.controller.start()
-  assert.equal(f.controller.snapshot.message, '等待游戏画面')
+  assert.equal(f.controller.snapshot.messageKey, 'waitingForGame')
   f.setView(f.view)
   await f.tick()
-  assert.match(f.controller.snapshot.message, /自动遮挡已就绪/)
+  assert.equal(f.controller.snapshot.messageKey, 'ready')
   assert.equal(f.view.handlers.size, 2)
   await f.controller.setEnabled(false)
   assert.equal(f.values.get('plugin.damage-shield.shieldEnabled'), false)
@@ -58,7 +58,7 @@ test('slow injections do not pile up and stop waits for pending work before clea
   resolve([])
   await stopping
   assert.equal(f.view.calls.length, 2)
-  assert.equal(f.controller.snapshot.message, '插件已停止')
+  assert.equal(f.controller.snapshot.messageKey, 'stopped')
 })
 
 test('a new webview replaces event listeners and disposes the previous game hook', async () => {
@@ -87,10 +87,10 @@ test('startup publishes loading immediately, before a webview injection can reso
   }
   f.controller.start()
   assert.ok(updates.length > 0)
-  assert.equal(updates[0].message, '等待游戏画面')
+  assert.equal(updates[0].messageKey, 'waitingForGame')
   assert.equal(updates[0].canTest, false)
   assert.equal(await f.controller.test(), false)
-  assert.match(f.controller.snapshot.message, /正在加载/)
+  assert.equal(f.controller.snapshot.messageKey, 'testUnavailable')
   assert.equal(f.view.calls.length, 1)
   resolve([{ hooks: 2, renderCount: 1, animationCount: 0 }])
   await new Promise(setImmediate)
@@ -150,10 +150,10 @@ test('a stalled old webview cannot block a replacement or overwrite its newer st
   }
   f.setView(replacement)
   await f.tick()
-  assert.equal(f.controller.snapshot.message, '自动遮挡已就绪')
+  assert.equal(f.controller.snapshot.messageKey, 'ready')
   finishOld([{ hooks: 2, renderCount: 50, animationCount: 20, covered: true }])
   await new Promise(setImmediate)
-  assert.equal(f.controller.snapshot.message, '自动遮挡已就绪')
+  assert.equal(f.controller.snapshot.messageKey, 'ready')
   const oldOwner = f.view.calls[0].match(/"owner":"([^"]+)"/)[1]
   const newOwner = replacement.calls[0].match(/"owner":"([^"]+)"/)[1]
   assert.notEqual(oldOwner, newOwner)

@@ -6,7 +6,7 @@
 
 ## 安装
 
-本项目不需要安装 npm 依赖，也不需要编译。
+插件运行时使用 poi 自带的 React 和翻译库，不需要额外安装运行依赖或编译。
 
 从源码目录安装到当前 Windows 用户的 poi：
 
@@ -16,7 +16,7 @@
 
 安装脚本只会新建 `%APPDATA%\poi\plugins-extra\node_modules\poi-plugin-damage-shield` 并复制插件文件；若目标已经存在，会停止以避免覆盖现有文件。随后启动或重启 poi，在插件列表中找到「破损动画遮挡」。
 
-也可以将 `dist/poi-plugin-damage-shield-0.1.2.tgz` 作为本地插件包交给 poi 的插件安装功能。两种安装方式任选一种。
+也可以将 `dist/poi-plugin-damage-shield-0.1.3.tgz` 作为本地插件包交给 poi 的插件安装功能。两种安装方式任选一种。
 
 ## 使用
 
@@ -28,6 +28,12 @@
 自动遮挡默认开启。「暂停自动遮挡」可临时关闭，并保存这个设置。禁用或卸载插件会移除页面遮罩、卸载自身的渲染监听。
 
 启动时直接接入已就绪的游戏帧，避免等待整个 DMM 页面和其他子页面完成加载。等待阶段每 250 毫秒检查一次，并在游戏页面引用或加载事件变化时立即重试；就绪后恢复为每秒更新一次状态。游戏引擎和首个游戏画面仍需完成自身加载。
+
+## 语言
+
+插件跟随 poi 的语言设置，支持简体中文、正體中文、日本語、English 和 한국어。插件名称、说明、按钮、状态提示和黑幕中的文字均提供翻译，无需在插件中单独选择语言。
+
+切换 poi 的语言后，已显示的状态会重新翻译，正在显示的黑幕也会更新文字。首次安装本版时重新加载插件或重启 poi，以便加载新增的翻译文件。翻译文件位于 `i18n/`，缺失的界面翻译使用英语作为默认文本。
 
 ## 覆盖范围
 
@@ -51,13 +57,14 @@
 需要 Node.js 20 或更高版本运行开发检查：
 
 ```powershell
-npm run check
-npm test
+npm.cmd ci --ignore-scripts
+npm.cmd run check
+npm.cmd test
 New-Item -ItemType Directory -Path dist -Force
-npm run pack:local
+npm.cmd run pack:local
 ```
 
-`index.js` 为 poi 插件入口；`src/controller.js` 管理 webview 和生命周期；`src/game-shield.js` 为可序列化的页面注入逻辑。React 使用 poi 已提供的运行时。
+`index.js` 为 poi 插件入口；`src/controller.js` 管理 webview 和生命周期；`src/game-shield.js` 为可序列化的页面注入逻辑；`src/i18n.js` 连接 poi 的翻译资源并提供默认文本。开发依赖中的 i18next 仅用于测试，不随插件安装运行。
 
 参考资料：
 

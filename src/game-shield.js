@@ -19,6 +19,7 @@ function runInGameFrames(command, options) {
           if (win[slot] && win[slot].owner !== options.owner) win[slot].dispose()
           if (!win[slot]) install(win, pixi)
           const state = win[slot]
+          state.updateStrings(options.strings)
           state.enabled = options.enabled !== false
           if (command === 'test') state.testUntil = Date.now() + 3000
           if (command === 'cancel-test') state.testUntil = 0
@@ -54,6 +55,15 @@ function runInGameFrames(command, options) {
       animationCount: 0,
       covered: false,
       error: null,
+      strings: {
+        overlayText: 'Animation playing',
+        canvasSizeError: 'Unable to determine the game canvas size',
+        canvasOverlayErrorPrefix: 'Canvas overlay failed: ',
+      },
+      updateStrings(strings) {
+        if (strings) Object.assign(state.strings, strings)
+        if (overlay) overlay.textContent = state.strings.overlayText
+      },
       hide() {
         state.covered = false
         if (overlay) overlay.style.display = 'none'
@@ -93,7 +103,7 @@ function runInGameFrames(command, options) {
         overlay = doc.createElement('div')
         overlay.id = 'poi-damage-shield-overlay'
         overlay.setAttribute('role', 'status')
-        overlay.textContent = '动画播放中'
+        overlay.textContent = state.strings.overlayText
         Object.assign(overlay.style, {
           position: 'fixed', inset: '0', zIndex: '2147483647',
           background: '#101215', color: '#e0e3e8', display: 'none',
@@ -180,7 +190,7 @@ function runInGameFrames(command, options) {
       const resolution = renderer.resolution || 1
       const width = renderer.screen ? renderer.screen.width : renderer.width / resolution
       const height = renderer.screen ? renderer.screen.height : renderer.height / resolution
-      if (!(width > 0 && height > 0)) throw new Error('无法确定游戏画布尺寸')
+      if (!(width > 0 && height > 0)) throw new Error(state.strings.canvasSizeError)
       if (!entry) {
         entry = { graphic: new pixi.Graphics(), width: 0, height: 0 }
         masks.set(renderer, entry)
@@ -234,7 +244,7 @@ function runInGameFrames(command, options) {
             try {
               original.call(this, maskFor(this), null, true)
             } catch (error) {
-              state.error = '画布遮挡失败：' + String(error && error.message || error)
+              state.error = state.strings.canvasOverlayErrorPrefix + String(error && error.message || error)
             }
           }
         }

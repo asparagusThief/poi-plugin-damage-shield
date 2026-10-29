@@ -5,16 +5,20 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const vm = require('node:vm')
 const { ShieldController } = require('../src/controller')
+const { namespace, ...localization } = require('../src/i18n')
+const { createI18n } = require('./helpers/locales')
 const source = fs.readFileSync(require.resolve('../index'), 'utf8')
 
-function panelFixture() {
-  let state, initialized = false, mounted = false, finishInjection
+function panelFixture(language = 'zh-CN') {
+  let state, initialized = false, mounted = false, connected = false, finishInjection
+  const i18n = createI18n(language)
   const effects = [], timers = new Set(), calls = []
   const view = {
     addEventListener() {}, removeEventListener() {},
     executeJavaScript(script) {
       calls.push(script)
       if (script.includes(')("dispose",')) return Promise.resolve([])
+      if (connected) return Promise.resolve([{ hooks: 2, renderCount: 1, animationCount: 0 }])
       return new Promise(resolve => { finishInjection = resolve })
     },
   }
@@ -36,17 +40,20 @@ function panelFixture() {
   }
   const context = vm.createContext({ exports: {}, console, require(name) {
     if (name === 'react') return React
+    if (name === 'react-i18next') return { useTranslation: () => ({ t: i18n.getFixedT(null, namespace) }) }
+    if (name === './src/i18n') return { namespace, ...localization }
     if (name === './src/controller') return { ShieldController: Controlled }
     if (name === 'views/create-store') return { getStore: () => view }
     if (name === 'views/env') return { config: { get: () => true, set() {} } }
+    if (name === 'views/env-parts/i18next') return { default: i18n }
     throw new Error(`Unexpected import: ${name}`)
   } })
   vm.runInContext(source, context)
   return {
-    plugin: context.exports, timers, calls,
+    plugin: context.exports, timers, calls, i18n,
     render: () => context.exports.reactClass(),
     mount: () => { for (const effect of effects) effect() },
-    finish: () => finishInjection([{ hooks: 2, renderCount: 1, animationCount: 0 }]),
+    finish: () => { connected = true; finishInjection([{ hooks: 2, renderCount: 1, animationCount: 0 }]) },
   }
 }
 
@@ -84,5 +91,37 @@ test('mounting the panel before the poi lifecycle callback still starts exactly 
   assert.equal(f.timers.size, 1)
   f.finish()
   await new Promise(setImmediate)
+  f.plugin.pluginWillUnload()
+})
+
+test('changing poi language translates an existing waiting status without needing a game response', async () => {
+  const f = panelFixture()
+  f.plugin.pluginDidLoad()
+  f.render(); f.mount()
+  assert.match(f.render().children[2].children[0], /^等待游戏/)
+  await f.i18n.changeLanguage('ja-JP')
+  const panel = f.render()
+  assert.equal(panel.children[0].children[0], '中破・大破演出マスク')
+  assert.equal(panel.children[2].children[0], 'ゲームの読み込みを待機中')
+  assert.equal(testButton(panel).children[0], 'マスクをテスト（3秒）')
+  assert.equal(testButton(panel).props.disabled, true)
+  f.finish()
+  await new Promise(setImmediate)
+  assert.equal(f.render().children[2].children[0], '自動マスクの準備完了')
+  assert.ok(f.calls.at(-1).includes('演出再生中'))
+  f.plugin.pluginWillUnload()
+})
+
+test('changing poi language immediately sends localized overlay text to the connected game', async () => {
+  const f = panelFixture('en-US')
+  f.plugin.pluginDidLoad()
+  f.render(); f.mount(); f.finish()
+  await new Promise(setImmediate)
+  await f.i18n.changeLanguage('ko-KR')
+  await new Promise(setImmediate)
+  const panel = f.render()
+  assert.equal(panel.children[0].children[0], '중파·대파 연출 가리기')
+  assert.equal(panel.children[2].children[0], '자동 가리기 준비 완료')
+  assert.ok(f.calls.at(-1).includes('연출 재생 중'))
   f.plugin.pluginWillUnload()
 })

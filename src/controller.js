@@ -4,10 +4,11 @@ const { runInGameFrames } = require('./game-shield')
 const settingPath = 'plugin.damage-shield.shieldEnabled'
 
 class ShieldController {
-  constructor({ getStore, config, store, clock = globalThis }) {
+  constructor({ getStore, config, store, getStrings = () => ({}), clock = globalThis }) {
     this.getStore = getStore
     this.config = config
     this.store = store
+    this.getStrings = getStrings
     this.clock = clock
     this.owner = `damage-shield-${Date.now()}-${Math.random().toString(36).slice(2)}`
     this.epoch = 0
@@ -17,7 +18,7 @@ class ShieldController {
     this.pending = null
     this.targets = new Map()
     this.listeners = new Set()
-    this.snapshot = { message: '等待游戏画面', frames: [], enabled: this.enabled, canTest: false }
+    this.snapshot = { messageKey: 'waitingForGame', frames: [], enabled: this.enabled, canTest: false }
     this.onLoaded = () => this.refresh()
   }
 
@@ -43,7 +44,7 @@ class ShieldController {
     if (this.running) return
     this.running = true
     // Publish before any Electron IPC can wait for page loading.
-    this.publish({ message: '等待游戏画面', canTest: false })
+    this.publish({ messageKey: 'waitingForGame', canTest: false })
     this.schedulePolling()
     if (this.store && typeof this.store.subscribe === 'function') {
       this.unsubscribeStore = this.store.subscribe(() => {
@@ -57,7 +58,7 @@ class ShieldController {
 
   script(command, owner, singleFrame = false) {
     return `(${runInGameFrames.toString()})(${JSON.stringify(command)},${JSON.stringify({
-      owner, enabled: this.enabled, singleFrame,
+      owner, enabled: this.enabled, singleFrame, strings: this.getStrings(),
     })})`
   }
 
@@ -78,7 +79,7 @@ class ShieldController {
     this.targets.clear()
     this.epoch++
     this.view = view
-    this.publish({ message: '等待游戏画面', frames: [], canTest: false })
+    this.publish({ messageKey: 'waitingForGame', frames: [], canTest: false })
     if (view && view.addEventListener) {
       view.addEventListener('dom-ready', this.onLoaded)
       view.addEventListener('did-frame-finish-load', this.onLoaded)
@@ -115,16 +116,16 @@ class ShieldController {
     const ready = frames.filter(frame => frame.hooks > 0)
     const canTest = ready.some(frame => frame.renderCount > 0)
     const error = ready.find(frame => frame.error) || (!ready.length && frames.find(frame => frame.error))
-    let message = this.view ? '等待游戏加载' : '等待游戏画面'
-    if (error) message = `检测异常：${error.error}`
+    let messageKey = this.view ? 'waitingForLoad' : 'waitingForGame'
+    if (error) messageKey = 'detectionError'
     else if (ready.length) {
-      message = ready.some(frame => frame.covered) ? '正在遮挡' :
-        ready.some(frame => frame.animationCount > 0) ? '自动遮挡运行中' :
-        canTest ? '自动遮挡已就绪' : '正在连接游戏画面'
+      messageKey = ready.some(frame => frame.covered) ? 'covering' :
+        ready.some(frame => frame.animationCount > 0) ? 'running' :
+        canTest ? 'ready' : 'connecting'
     } else if (frames.some(frame => frame.hooks === 0)) {
-      message = '暂时无法识别游戏画面，请反馈版本信息'
+      messageKey = 'unsupported'
     }
-    this.publish({ message, frames, canTest })
+    this.publish({ messageKey, messageParams: error ? { error: error.error } : {}, frames, canTest })
   }
 
   runTarget(entry, command) {
@@ -166,7 +167,7 @@ class ShieldController {
       this.bindView(view)
       descriptors = view ? this.getTargets(view) : []
     } catch (error) {
-      this.publish({ message: `等待游戏画面：${error.message || error}`, canTest: false })
+      this.publish({ messageKey: 'waitingWithError', messageParams: { error: String(error.message || error) }, canTest: false })
       return Promise.resolve()
     }
     const present = new Set(descriptors.map(target => target.key))
@@ -182,7 +183,7 @@ class ShieldController {
       }
     }
     if (!descriptors.length) {
-      this.publish({ message: '等待游戏画面', frames: [], canTest: false })
+      this.publish({ messageKey: 'waitingForGame', frames: [], canTest: false })
     } else if (changed) this.publishFrames()
     const jobs = []
     for (const entry of this.targets.values()) {
@@ -208,7 +209,7 @@ class ShieldController {
 
   async test() {
     if (!this.snapshot.canTest) {
-      this.publish({ message: '游戏画面正在加载，暂时无法测试黑幕' })
+      this.publish({ messageKey: 'testUnavailable' })
       this.refresh()
       return false
     }
@@ -224,7 +225,7 @@ class ShieldController {
     this.unbindView()
     const cleanups = Array.from(this.targets.values(), entry => this.retire(entry))
     this.targets.clear()
-    this.publish({ message: '插件已停止', frames: [], canTest: false })
+    this.publish({ messageKey: 'stopped', frames: [], canTest: false })
     this.listeners.clear()
     await Promise.all(cleanups)
   }

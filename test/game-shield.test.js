@@ -248,3 +248,34 @@ test('native frame mode does not traverse and double-count sibling or child game
   assert.equal(env.win.__poiDamageShieldV1, undefined)
   assert.equal(env.run('sync', { owner: 'native', singleFrame: true }).length, 1)
 })
+
+test('an active overlay changes language without reinstalling hooks or interrupting coverage', () => {
+  const env = environment()
+  env.run('sync', { strings: { overlayText: '动画播放中' } })
+  const renderer = new env.Renderer(), stage = new env.Container()
+  stage.addChild(env.damageView())
+  renderer.render(stage)
+  const hook = env.Renderer.prototype.render
+  const overlay = env.elements[0]
+  assert.equal(overlay.textContent, '动画播放中')
+  env.run('sync', { strings: { overlayText: '演出再生中' } })
+  assert.equal(overlay.textContent, '演出再生中')
+  assert.equal(overlay.style.display, 'flex')
+  assert.equal(env.Renderer.prototype.render, hook)
+  renderer.render(stage)
+  assert.equal(env.run()[0].animationCount, 1)
+  assert.equal(env.run()[0].covered, true)
+})
+
+test('canvas failure diagnostics use the current localized labels', () => {
+  const env = environment()
+  env.run('sync', { strings: {
+    canvasSizeError: 'ゲームのキャンバスサイズを取得できません',
+    canvasOverlayErrorPrefix: 'キャンバスのマスクに失敗しました：',
+  } })
+  const renderer = new env.Renderer(), stage = new env.Container()
+  stage.addChild(env.damageView())
+  renderer.width = 0
+  renderer.render(stage)
+  assert.equal(env.run()[0].error, 'キャンバスのマスクに失敗しました：ゲームのキャンバスサイズを取得できません')
+})
