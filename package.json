@@ -1,9 +1,21 @@
 {
   "name": "poi-plugin-damage-shield",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "在舰船中破／大破立绘动画播放期间遮挡整个游戏画面。",
   "main": "index.js",
   "license": "MIT",
+  "author": {
+    "name": "asparagusThief",
+    "url": "https://github.com/asparagusThief"
+  },
+  "homepage": "https://github.com/asparagusThief/poi-plugin-damage-shield#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asparagusThief/poi-plugin-damage-shield.git"
+  },
+  "bugs": {
+    "url": "https://github.com/asparagusThief/poi-plugin-damage-shield/issues"
+  },
   "files": [
     "index.js",
     "src",

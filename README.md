@@ -16,7 +16,7 @@
 
 安装脚本只会新建 `%APPDATA%\poi\plugins-extra\node_modules\poi-plugin-damage-shield` 并复制插件文件；若目标已经存在，会停止以避免覆盖现有文件。随后启动或重启 poi，在插件列表中找到「破损动画遮挡」。
 
-也可以将 `dist/poi-plugin-damage-shield-0.1.3.tgz` 作为本地插件包交给 poi 的插件安装功能。两种安装方式任选一种。
+也可以将 `dist/poi-plugin-damage-shield-0.1.4.tgz` 作为本地插件包交给 poi 的插件安装功能。两种安装方式任选一种。
 
 ## 使用
 
