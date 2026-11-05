@@ -17,7 +17,8 @@ if (Test-Path -LiteralPath $destination) {
     throw "Plugin already exists; no files were overwritten: $destination"
 }
 
-$payload = @('package.json', 'index.js', 'README.md', 'LICENSE', 'src\controller.js', 'src\game-shield.js', 'src\i18n.js',
+$payload = @('package.json', 'index.js', 'README.md', 'README.zh-CN.md', 'README.zh-TW.md', 'README.ja-JP.md', 'README.ko-KR.md',
+    'LICENSE', 'src\controller.js', 'src\game-shield.js', 'src\i18n.js',
     'i18n\zh-CN.json', 'i18n\zh-TW.json', 'i18n\ja-JP.json', 'i18n\en-US.json', 'i18n\ko-KR.json')
 foreach ($relativePath in $payload) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceDirectory $relativePath) -PathType Leaf)) {

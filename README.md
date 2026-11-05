@@ -1,60 +1,72 @@
-# poi 破损动画遮挡
+# Damage Animation Shield for poi
 
-面向 **poi 12.0.1** 的本地插件。舰船中破／大破立绘动画显示时，以不透明黑幕覆盖整个游戏区域；动画及其结尾的白色淡出消失后，恢复画面。
+[English](README.md) | [简体中文](README.zh-CN.md) | [正體中文](README.zh-TW.md) | [日本語](README.ja-JP.md) | [한국어](README.ko-KR.md)
 
-已通过自动测试和真实 PIXI Canvas／WebGL 像素检查，用户已确认在 **poi 12.0.1 的在线战斗中自动触发正常**。
+A plugin for **poi 12.0.1** that covers the entire KanColle game area with an opaque black overlay during medium and heavy damage cut-in animations. The game screen returns automatically after the animation and its ending white fade have disappeared. Game animations and audio continue while the overlay is visible.
 
-## 安装
+The plugin has passed automated tests and pixel checks with real PIXI Canvas/WebGL renderers. Automatic triggering has also been confirmed in **live battles on poi 12.0.1**.
 
-插件运行时使用 poi 自带的 React 和翻译库，不需要额外安装运行依赖或编译。
+## Installation
 
-从源码目录安装到当前 Windows 用户的 poi：
+### Install by package name
+
+Open poi's plugin management page, enter the following package name in the installation field, and install it:
+
+```text
+poi-plugin-damage-shield
+```
+
+Enable the plugin after installation. If it does not appear immediately, restart poi and look for **Damage Animation Shield** in the plugin list. The plugin uses React and translation libraries bundled with poi; no extra runtime dependencies or build step are required.
+
+### Install from source or a local package
+
+From the source directory, install into the current Windows user's poi data directory:
 
 ```powershell
 & .\scripts\install-local.ps1
 ```
 
-安装脚本只会新建 `%APPDATA%\poi\plugins-extra\node_modules\poi-plugin-damage-shield` 并复制插件文件；若目标已经存在，会停止以避免覆盖现有文件。随后启动或重启 poi，在插件列表中找到「破损动画遮挡」。
+The script creates `%APPDATA%\poi\plugins-extra\node_modules\poi-plugin-damage-shield` and copies the plugin files, including translations and all README languages. It stops if the destination already exists to avoid overwriting an existing installation. Restart poi afterward.
 
-也可以将 `dist/poi-plugin-damage-shield-0.1.4.tgz` 作为本地插件包交给 poi 的插件安装功能。两种安装方式任选一种。
+Alternatively, use poi's local package installation option to install a `.tgz` archive built with `npm.cmd run pack:local`. Choose one installation method.
 
-## 使用
+## Usage
 
-1. 打开「破损动画遮挡」插件页。游戏尚未就绪时会显示加载状态，插件会自动连接游戏画面。
-2. 出现「自动遮挡已就绪」后，无需额外操作，破损动画出现时会自动遮挡。
-3. 如需预览效果，点击「测试黑幕（3 秒）」，游戏画面会被遮挡 3 秒后自动恢复。游戏画面尚未接入时，测试按钮暂时禁用；接入首个游戏画面后自动启用。
-4. 中破／大破立绘动画及收尾淡出结束后，游戏画面自动恢复。插件页会显示本次游戏加载已识别的破损动画次数。
+1. Open the **Damage Animation Shield** plugin panel. While the game is loading, the plugin shows a loading status and connects automatically.
+2. Once **Automatic shielding is ready** appears, damage cut-in animations are covered automatically.
+3. Click **Test blackout (3 seconds)** to preview the overlay. This button stays disabled until the first game frame is available.
+4. The screen returns automatically after the damage cut-in and its ending fade. The panel shows the number of damage animations detected since the game last loaded.
 
-自动遮挡默认开启。「暂停自动遮挡」可临时关闭，并保存这个设置。禁用或卸载插件会移除页面遮罩、卸载自身的渲染监听。
+Automatic shielding is enabled by default. **Pause automatic shielding** temporarily turns it off and saves that setting; **Enable automatic shielding** turns it back on. Disabling or uninstalling the plugin removes its overlay and rendering hooks.
 
-启动时直接接入已就绪的游戏帧，避免等待整个 DMM 页面和其他子页面完成加载。等待阶段每 250 毫秒检查一次，并在游戏页面引用或加载事件变化时立即重试；就绪后恢复为每秒更新一次状态。游戏引擎和首个游戏画面仍需完成自身加载。
+At startup, the plugin connects to ready game frames without waiting for the entire DMM page and other frames to finish loading. It checks every 250 ms while waiting, retries immediately when the game view or loading state changes, and updates status once per second after becoming ready. The game engine and first game frame still need to load.
 
-## 语言
+## Languages
 
-插件跟随 poi 的语言设置，支持简体中文、正體中文、日本語、English 和 한국어。插件名称、说明、按钮、状态提示和黑幕中的文字均提供翻译，无需在插件中单独选择语言。
+The interface follows poi's language setting and supports Simplified Chinese, Traditional Chinese, Japanese, English, and Korean. The plugin name, description, buttons, status messages, and overlay text are translated; no separate language selection is needed in the plugin.
 
-切换 poi 的语言后，已显示的状态会重新翻译，正在显示的黑幕也会更新文字。首次安装本版时重新加载插件或重启 poi，以便加载新增的翻译文件。翻译文件位于 `i18n/`，缺失的界面翻译使用英语作为默认文本。
+Changing poi's language updates the current status and any visible overlay immediately. Reload the plugin or restart poi after installing an update that adds translation files. Interface translations are stored in `i18n/`, with English defaults for missing translations. Use the links at the top of this document to select a README language.
 
-## 覆盖范围
+## Coverage
 
-- 覆盖整个游戏画面，不覆盖 poi 的插件面板和操作系统桌面。
-- 根据游戏 Canvas 渲染内容判断动画起止，不用战斗 API 预估播放时间。
-- 游戏原本的渲染和声音继续运行；只在输出画布上追加不透明绘制，并覆盖游戏页面。
-- 同时覆盖使用相同破损演出结构的敌方特殊破损立绘。
-- 不遮挡母港中持续显示的受损立绘，也不扩展到其他非破损动画。
-- 通过 poi 当前游戏 webview 引用重新接入刷新后的页面及游戏独立窗口；窗口切换的宿主逻辑已测试，实际 poi 窗口切换仍需实机确认。
+- Covers the entire game area, leaving poi's plugin panels and the operating system desktop visible.
+- Detects animation boundaries from the game's Canvas rendering rather than estimating timing from battle API responses.
+- Lets the game's rendering and audio continue; adds an opaque layer to the output canvas and covers the game page.
+- Also covers enemy damage cut-ins that use the same animation structure.
+- Does not cover persistent damaged artwork in the home port or unrelated animations.
+- Reconnects through poi's current game webview after a refresh or a switch to the separate game window. Host-side window switching logic is tested; switching windows in a running poi instance still needs user verification.
 
-## 识别机制与限制
+## Detection and limitations
 
-动画识别依据公开的舰 C 客户端 **6.3.6.0** 分析脚本中 `TaskDamageCutin`／`TaskEnemyDamageCutin` 的容器结构，以及 `battle_cutin_damage_100` 纹理。监听安装在游戏页面的主执行环境中，渲染前识别破损演出，原始渲染后、同一 JavaScript 调用结束前覆盖画布，因此原始 Canvas 截图也会被遮挡。最后的白色淡出通过实际画面对象的存在状态跟踪，不设置固定的动画时长。
+Detection is based on the `TaskDamageCutin` / `TaskEnemyDamageCutin` container structures and the `battle_cutin_damage_100` texture in public analysis of KanColle client **6.3.6.0**. Hooks run in the game page's main JavaScript context. They identify damage cut-ins before rendering, then cover the output canvas after the original rendering finishes, within the same JavaScript call. Raw Canvas screenshots are therefore covered as well. The ending white fade is tracked through the actual scene objects, without assuming a fixed animation duration.
 
-游戏更新若改变容器字段、纹理名称或渲染引擎，可能导致识别失效，需要重新适配。「自动遮挡已就绪」表示当前游戏画面的检测正在运行。反馈问题时请提供 poi 版本、游戏版本、插件页状态，以及当时是否使用游戏独立窗口。
+Game updates that change container fields, texture names, or the rendering engine may require a compatibility update. **Automatic shielding is ready** means detection is running for the current game view. When reporting a problem, include your poi version, game version, plugin status, and whether you were using the separate game window.
 
-实现不修改 poi 安装文件或游戏脚本文件，不发送游戏请求，不执行游戏操作，也不上传账号信息。
+The plugin does not modify poi installation files or game script files, send game requests, perform game actions, or upload account information.
 
-## 开发与检查
+## Development and checks
 
-需要 Node.js 20 或更高版本运行开发检查：
+Use Node.js 20 or newer for development checks:
 
 ```powershell
 npm.cmd ci --ignore-scripts
@@ -64,10 +76,14 @@ New-Item -ItemType Directory -Path dist -Force
 npm.cmd run pack:local
 ```
 
-`index.js` 为 poi 插件入口；`src/controller.js` 管理 webview 和生命周期；`src/game-shield.js` 为可序列化的页面注入逻辑；`src/i18n.js` 连接 poi 的翻译资源并提供默认文本。开发依赖中的 i18next 仅用于测试，不随插件安装运行。
+`index.js` is the poi entry point; `src/controller.js` manages the webview and lifecycle; `src/game-shield.js` contains the serializable game-page injection logic; `src/i18n.js` connects to poi's translation resources and supplies default text. The i18next development dependency is used only for tests and is not installed as a runtime dependency.
 
-参考资料：
+## References and license
 
+- [npm package](https://www.npmjs.com/package/poi-plugin-damage-shield)
+- [Source code and issue reports](https://github.com/asparagusThief/poi-plugin-damage-shield)
 - [poi 12.0.1](https://github.com/poooi/poi/releases/tag/v12.0.1)
-- [poi 游戏画面宿主](https://github.com/poooi/poi/blob/master/views/kan-game-wrapper.tsx)
-- [公开客户端分析脚本](https://github.com/kcwiki/kancolle-main)
+- [poi game view host](https://github.com/poooi/poi/blob/master/views/kan-game-wrapper.tsx)
+- [Public client analysis](https://github.com/kcwiki/kancolle-main)
+
+Released under the [MIT License](LICENSE).
