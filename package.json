@@ -1,6 +1,6 @@
 {
   "name": "poi-plugin-damage-shield",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A poi plugin that covers the entire KanColle game area during medium and heavy damage cut-in animations.",
   "main": "index.js",
   "license": "MIT",
