@@ -3,7 +3,13 @@
 const { runInGameFrames } = require('./game-shield')
 // Preserve the saved shielding preference independently of poi's display ID.
 const settingPath = 'plugin.damage-shield.shieldEnabled'
+const colorPath = 'plugin.damage-shield.shieldColor'
+const defaultColor = '#101215'
 const responseTimeout = 10000
+
+function normalizeColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : defaultColor
+}
 
 class ShieldController {
   constructor({ getStore, config, store, getStrings = () => ({}), clock = globalThis }) {
@@ -16,12 +22,13 @@ class ShieldController {
     this.owner = `damage-shield-${Date.now()}-${Math.random().toString(36).slice(2)}`
     this.connectionSequence = 0
     this.enabled = config.get(settingPath, true)
+    this.color = normalizeColor(config.get(colorPath, defaultColor))
     this.running = false
     this.view = null
     this.pending = null
     this.targets = new Map()
     this.listeners = new Set()
-    this.snapshot = { messageKey: 'waitingForGame', frames: [], enabled: this.enabled, canTest: false }
+    this.snapshot = { messageKey: 'waitingForGame', frames: [], enabled: this.enabled, color: this.color, canTest: false }
     this.onLoaded = () => this.refresh()
   }
 
@@ -32,7 +39,7 @@ class ShieldController {
 
   publish(update) {
     const wasReady = this.snapshot.canTest
-    this.snapshot = { ...this.snapshot, ...update, enabled: this.enabled }
+    this.snapshot = { ...this.snapshot, ...update, enabled: this.enabled, color: this.color }
     for (const listener of this.listeners) listener(this.snapshot)
     if (wasReady !== this.snapshot.canTest) this.schedulePolling()
   }
@@ -61,7 +68,7 @@ class ShieldController {
 
   script(command, owner, singleFrame = false) {
     return `(${runInGameFrames.toString()})(${JSON.stringify(command)},${JSON.stringify({
-      owner, enabled: this.enabled, singleFrame, strings: this.getStrings(),
+      owner, enabled: this.enabled, color: this.color, singleFrame, strings: this.getStrings(),
     })})`
   }
 
@@ -224,6 +231,15 @@ class ShieldController {
     this.refresh('sync-now')
   }
 
+  setColor(value) {
+    const color = normalizeColor(value)
+    if (color === this.color) return
+    this.color = color
+    this.config.set(colorPath, color)
+    this.publish({})
+    this.refresh('sync-now')
+  }
+
   async test() {
     if (!this.snapshot.canTest) {
       this.publish({ messageKey: 'testUnavailable' })
@@ -248,4 +264,4 @@ class ShieldController {
   }
 }
 
-module.exports = { ShieldController }
+module.exports = { ShieldController, defaultColor }

@@ -4,7 +4,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const vm = require('node:vm')
-const { ShieldController } = require('../src/controller')
+const { ShieldController, defaultColor } = require('../src/controller')
 const { namespace, ...localization } = require('../src/i18n')
 const { createI18n } = require('./helpers/locales')
 const source = fs.readFileSync(require.resolve('../index'), 'utf8')
@@ -62,7 +62,7 @@ function panelFixture(language = 'zh-CN', initialConfig = []) {
     if (name === 'react') return React
     if (name === 'react-i18next') return { useTranslation: () => ({ t: i18n.getFixedT(null, namespace) }) }
     if (name === './src/i18n') return { namespace, ...localization }
-    if (name === './src/controller') return { ShieldController: Controlled }
+    if (name === './src/controller') return { ShieldController: Controlled, defaultColor }
     if (name === 'views/create-store') return { getStore: () => view, store: {
       subscribe(fn) { subscriptions.add(fn); return () => subscriptions.delete(fn) },
     } }
@@ -88,6 +88,16 @@ function panelFixture(language = 'zh-CN', initialConfig = []) {
 
 function testButton(panel) {
   return panel.children.find(child => child && child.type === 'div').children[0]
+}
+
+function findElement(node, predicate) {
+  if (!node || typeof node !== 'object') return null
+  if (predicate(node)) return node
+  for (const child of node.children || []) {
+    const found = findElement(child, predicate)
+    if (found) return found
+  }
+  return null
 }
 
 test('the panel shows loading and disables its test button while the first injection is pending', async () => {
@@ -252,4 +262,37 @@ test('unloading during a pending injection still disposes the game hooks after i
   assert.equal(f.calls.length, 2)
   assert.ok(f.calls[1].includes(')("dispose",'))
   assert.ok(f.calls[1].includes('演出再生中'))
+})
+
+test('the color picker loads saved settings, works during loading and can reset to the default', async () => {
+  const f = panelFixture('en-US', [['plugin.damage-shield.shieldColor', '#99aabb']])
+  f.render(); f.mount()
+  let picker = findElement(f.render(), node => node.type === 'input' && node.props.type === 'color')
+  assert.equal(picker.props.value, '#99aabb')
+  assert.equal(picker.props['aria-label'], 'Overlay color')
+  picker.props.onChange({ target: { value: '#c0ffee' } })
+  assert.equal(f.values.get('plugin.damage-shield.shieldColor'), '#c0ffee')
+  assert.equal(findElement(f.render(), node => node.props.type === 'color').props.value, '#c0ffee')
+  const reset = findElement(f.render(), node => node.type === 'button' && node.children[0] === 'Reset color')
+  assert.equal(reset.props.disabled, false)
+  reset.props.onClick()
+  assert.equal(f.values.get('plugin.damage-shield.shieldColor'), defaultColor)
+  assert.equal(findElement(f.render(), node => node.type === 'button' && node.children[0] === 'Reset color').props.disabled, true)
+  f.finish()
+  await new Promise(setImmediate)
+  assert.ok(f.calls.at(-1).includes(`"color":"${defaultColor}"`))
+  f.plugin.pluginWillUnload()
+})
+
+test('changing poi language updates color controls without resetting the chosen color', async () => {
+  const f = panelFixture('en-US', [['plugin.damage-shield.shieldColor', '#ff6600']])
+  f.render(); f.mount(); f.finish()
+  await new Promise(setImmediate)
+  await f.i18n.changeLanguage('zh-CN')
+  const panel = f.render()
+  assert.equal(findElement(panel, node => node.props.type === 'color').props['aria-label'], '遮挡颜色')
+  assert.equal(findElement(panel, node => node.props.type === 'color').props.value, '#ff6600')
+  assert.ok(findElement(panel, node => node.type === 'button' && node.children[0] === '恢复默认颜色'))
+  assert.equal(testButton(panel).children[0], '测试遮挡（3 秒）')
+  f.plugin.pluginWillUnload()
 })

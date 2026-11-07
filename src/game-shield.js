@@ -21,6 +21,7 @@ function runInGameFrames(command, options) {
           const state = win[slot]
           state.ensureHooks()
           state.updateStrings(options.strings)
+          if (options.color !== undefined) state.updateColor(options.color)
           state.enabled = options.enabled !== false
           if (command === 'test') state.testUntil = Date.now() + 3000
           if (command === 'cancel-test') state.testUntil = 0
@@ -60,6 +61,9 @@ function runInGameFrames(command, options) {
       animationCount: 0,
       covered: false,
       error: null,
+      color: '#101215',
+      colorValue: 0x101215,
+      textColor: '#ffffff',
       strings: {
         overlayText: 'Animation playing',
         canvasSizeError: 'Unable to determine the game canvas size',
@@ -68,6 +72,19 @@ function runInGameFrames(command, options) {
       updateStrings(strings) {
         if (strings) Object.assign(state.strings, strings)
         if (overlay) overlay.textContent = state.strings.overlayText
+      },
+      updateColor(value) {
+        const color = typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : '#101215'
+        if (color === state.color) return
+        state.color = color
+        state.colorValue = parseInt(color.slice(1), 16)
+        const channels = [16, 8, 0].map(shift => {
+          const component = ((state.colorValue >> shift) & 255) / 255
+          return component <= 0.04045 ? component / 12.92 : Math.pow((component + 0.055) / 1.055, 2.4)
+        })
+        const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+        state.textColor = luminance > 0.179 ? '#000000' : '#ffffff'
+        if (overlay) Object.assign(overlay.style, { background: state.color, color: state.textColor })
       },
       hide() {
         state.covered = false
@@ -80,6 +97,7 @@ function runInGameFrames(command, options) {
           renderCount: state.renderCount,
           animationCount: state.animationCount,
           covered: state.covered,
+          color: state.color,
           testing: state.testUntil > Date.now(),
           error: state.error,
         }
@@ -115,7 +133,7 @@ function runInGameFrames(command, options) {
         overlay.textContent = state.strings.overlayText
         Object.assign(overlay.style, {
           position: 'fixed', inset: '0', zIndex: '2147483647',
-          background: '#101215', color: '#e0e3e8', display: 'none',
+          background: state.color, color: state.textColor, display: 'none',
           alignItems: 'center', justifyContent: 'center',
           font: '16px sans-serif', pointerEvents: 'auto',
         })
@@ -206,13 +224,14 @@ function runInGameFrames(command, options) {
         masks.set(renderer, entry)
         graphics.add(entry.graphic)
       }
-      if (entry.width !== width || entry.height !== height) {
+      if (entry.width !== width || entry.height !== height || entry.color !== state.colorValue) {
         entry.graphic.clear()
-        entry.graphic.beginFill(0x101215, 1)
+        entry.graphic.beginFill(state.colorValue, 1)
         entry.graphic.drawRect(0, 0, width, height)
         entry.graphic.endFill()
         entry.width = width
         entry.height = height
+        entry.color = state.colorValue
       }
       return entry.graphic
     }

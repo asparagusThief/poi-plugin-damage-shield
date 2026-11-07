@@ -2,13 +2,13 @@
 
 const React = require('react')
 const { useTranslation } = require('react-i18next')
-const { ShieldController } = require('./src/controller')
+const { ShieldController, defaultColor } = require('./src/controller')
 const { namespace, translate, overlayStrings } = require('./src/i18n')
 let controller = null
 let poiI18n = null
 let onLanguageChanged = null
 const subscribers = new Set()
-let latest = { messageKey: 'starting', frames: [], enabled: true, canTest: false }
+let latest = { messageKey: 'starting', frames: [], enabled: true, color: defaultColor, canTest: false }
 
 function migratePoiPreferences(config) {
   const keys = ['poi.plugin.windowmode', 'poi.plugin.pin', 'poi.plugin.favorite']
@@ -63,6 +63,7 @@ exports.reactClass = function DamageShieldPanel() {
     return () => subscribers.delete(setStatus)
   }, [])
   const h = React.createElement
+  const color = status.color || defaultColor
   const count = status.frames.reduce((sum, frame) => sum + (frame.animationCount || 0), 0)
   return h('div', { style: { padding: 16, maxWidth: 600, lineHeight: 1.7 } },
     h('h3', { style: { marginTop: 0 } }, tr('Damage Animation Shield')),
@@ -75,6 +76,16 @@ exports.reactClass = function DamageShieldPanel() {
         onClick: () => controller && controller.test() }, tr('testButton')),
       h('button', { className: 'bp6-button', onClick: () => controller && controller.setEnabled(!status.enabled) },
         tr(status.enabled ? 'pauseButton' : 'enableButton'))),
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 14 } },
+      h('label', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+        tr('shieldColorLabel'),
+        h('input', { type: 'color', value: color, 'aria-label': tr('shieldColorLabel'),
+          onChange: event => controller && controller.setColor(event.target.value),
+          style: { width: 44, height: 30, padding: 2, cursor: 'pointer' } })),
+      h('code', null, color.toUpperCase()),
+      h('button', { className: 'bp6-button', disabled: color === defaultColor,
+        onClick: () => controller && controller.setColor(defaultColor) }, tr('resetColorButton'))),
+    h('p', { style: { opacity: 0.8, marginTop: 6 } }, tr('colorHint')),
     h('p', { style: { opacity: 0.8 } }, tr('previewHint')),
     h('p', { style: { opacity: 0.8 } }, tr('playbackHint')))
 }

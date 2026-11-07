@@ -3,11 +3,11 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const vm = require('node:vm')
-const { ShieldController } = require('../src/controller')
+const { ShieldController, defaultColor } = require('../src/controller')
 
-function fixture() {
+function fixture(initialConfig = []) {
   let current = null, tick, time = 0
-  const values = new Map()
+  const values = new Map(initialConfig)
   const config = { get: (key, fallback) => values.has(key) ? values.get(key) : fallback,
     set: (key, value) => values.set(key, value) }
   const clock = { now: () => time, setInterval: fn => { tick = fn; return 7 }, clearInterval: id => { assert.equal(id, 7); tick = null } }
@@ -269,5 +269,61 @@ test('reconnecting the same native frame gives delayed cleanup a distinct owner'
   await new Promise(setImmediate)
   assert.equal(owner(calls[2]), owner(calls[0]))
   assert.equal(f.controller.snapshot.messageKey, 'ready')
+  await f.controller.stop()
+})
+
+test('loads the saved color, applies changes to the game and retains them after reopening', async () => {
+  const key = 'plugin.damage-shield.shieldColor'
+  const f = fixture([[key, '#ABCDEF']])
+  f.setView(f.view); f.controller.start()
+  await f.controller.pending
+  assert.equal(f.controller.snapshot.color, '#abcdef')
+  assert.match(f.view.calls.at(-1), /"color":"#abcdef"/)
+  f.controller.setColor('#346699')
+  await f.controller.pending
+  assert.equal(f.values.get(key), '#346699')
+  assert.match(f.view.calls.at(-1), /"color":"#346699"/)
+  const reopened = new ShieldController({ getStore: () => null,
+    config: { get: (name, fallback) => f.values.has(name) ? f.values.get(name) : fallback } })
+  assert.equal(reopened.snapshot.color, '#346699')
+  f.controller.setColor(defaultColor)
+  await f.controller.pending
+  assert.equal(f.values.get(key), defaultColor)
+  assert.equal(f.controller.snapshot.color, defaultColor)
+  await f.controller.stop()
+})
+
+test('changing color while paused preserves the pause and invalid saved colors fall back safely', async () => {
+  const f = fixture([['plugin.damage-shield.shieldColor', 'rgba(0,0,0,0)']])
+  assert.equal(f.controller.color, defaultColor)
+  f.setView(f.view); f.controller.start()
+  await f.controller.pending
+  f.controller.setEnabled(false)
+  await f.controller.pending
+  f.controller.setColor('#ffffff')
+  await f.controller.pending
+  assert.equal(f.controller.snapshot.enabled, false)
+  assert.equal(f.controller.snapshot.color, '#ffffff')
+  assert.match(f.view.calls.at(-1), /"enabled":false,"color":"#ffffff"/)
+  await f.controller.stop()
+})
+
+test('the most recent color selected during startup reaches the game after its pending connection', async () => {
+  const f = fixture()
+  let finish
+  f.view.executeJavaScript = script => {
+    f.view.calls.push(script)
+    if (f.view.calls.length === 1) return new Promise(resolve => { finish = resolve })
+    return Promise.resolve([{ hooks: 2, renderCount: 1 }])
+  }
+  f.setView(f.view); f.controller.start()
+  f.controller.setColor('#112233')
+  f.controller.setColor('#fedcba')
+  assert.equal(f.view.calls.length, 1)
+  assert.equal(f.controller.snapshot.color, '#fedcba')
+  finish([{ hooks: 2, renderCount: 1 }])
+  await new Promise(setImmediate)
+  assert.equal(f.view.calls.length, 2)
+  assert.match(f.view.calls[1], /"color":"#fedcba"/)
   await f.controller.stop()
 })

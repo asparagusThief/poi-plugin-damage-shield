@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [正體中文](README.zh-TW.md) | [日本語](README.ja-JP.md) | [한국어](README.ko-KR.md)
 
-A KanColle plugin for **poi 12.0.1**. Covers the entire game area with a black overlay during medium and heavy damage cut-in animations, then restores the screen automatically. Animations and audio continue while the overlay is visible.
+A KanColle plugin for **poi 12.0.1**. Covers the entire game area with a solid-color overlay during medium and heavy damage cut-in animations, then restores the screen automatically. Animations and audio continue while the overlay is visible.
 
 ## Installation
 
@@ -17,8 +17,9 @@ Enable the plugin after installation. Restart poi if it does not appear in the p
 ## Usage
 
 1. Open **Damage Animation Shield** and wait for **Automatic shielding is ready**. Damage cut-ins will then be covered automatically.
-2. Click **Test blackout (3 seconds)** to preview the overlay. The button is unavailable while the game screen is loading.
+2. Click **Test overlay (3 seconds)** to preview the overlay. The button is unavailable while the game screen is loading.
 3. Use **Pause automatic shielding** or **Enable automatic shielding** to control automatic coverage. Your setting is saved.
+4. Choose an **Overlay color** to apply and save it immediately. **Reset color** restores the default dark color.
 
 ## Languages
 

@@ -370,3 +370,58 @@ test('reattaches an overlay removed by the game page while an animation is playi
   assert.equal(overlay.style.display, 'flex')
   assert.equal(renderer.draws.at(-1).root.opacity, 1)
 })
+
+test('applies a chosen color to both output layers and updates it during an active damage animation', () => {
+  const env = environment()
+  env.run('sync', { color: '#FFFFFF' })
+  const renderer = new env.Renderer(), stage = new env.Container()
+  stage.addChild(env.damageView())
+  renderer.render(stage)
+  const mask = renderer.draws.at(-1).root
+  const overlay = env.elements[0]
+  const hook = env.Renderer.prototype.render
+  assert.equal(mask.color, 0xffffff)
+  assert.equal(mask.opacity, 1)
+  assert.equal(overlay.style.background, '#ffffff')
+  assert.equal(overlay.style.color, '#000000')
+  env.run('sync', { color: '#123456' })
+  assert.equal(overlay.style.background, '#123456')
+  assert.equal(overlay.style.color, '#ffffff')
+  assert.equal(overlay.style.display, 'flex')
+  renderer.render(stage)
+  assert.equal(renderer.draws.at(-1).root, mask)
+  assert.equal(mask.color, 0x123456)
+  assert.equal(mask.opacity, 1)
+  assert.equal(env.Renderer.prototype.render, hook)
+  assert.equal(env.run()[0].animationCount, 1)
+  assert.equal(env.run()[0].color, '#123456')
+})
+
+test('manual previews and resized masks use the selected fully opaque color including pure black', () => {
+  for (const color of ['#0044ff', '#000000']) {
+    const env = environment()
+    env.run('test', { color })
+    const renderer = new env.Renderer(), stage = new env.Container()
+    renderer.render(stage)
+    renderer.screen = { width: 800, height: 480 }
+    renderer.render(stage)
+    const mask = renderer.draws.at(-1).root
+    assert.equal(mask.color, parseInt(color.slice(1), 16))
+    assert.equal(mask.opacity, 1)
+    assert.deepEqual(mask.rectangle, { x: 0, y: 0, width: 800, height: 480 })
+    assert.equal(env.elements[0].style.background, color)
+    assert.equal(env.run()[0].covered, true)
+  }
+})
+
+test('invalid or transparent color values cannot make the game overlay transparent', () => {
+  for (const color of ['transparent', 'rgba(0,0,0,0)', '#ffffff00', 'invalid', null]) {
+    const env = environment()
+    env.run('test', { color })
+    const renderer = new env.Renderer()
+    renderer.render(new env.Container())
+    assert.equal(renderer.draws.at(-1).root.color, 0x101215)
+    assert.equal(renderer.draws.at(-1).root.opacity, 1)
+    assert.equal(env.elements[0].style.background, '#101215')
+  }
+})
