@@ -16,9 +16,10 @@ function runInGameFrames(command, options) {
       } else {
         const pixi = win.PIXI
         if (pixi && pixi.Graphics) {
-          if (win[slot] && win[slot].owner !== options.owner) win[slot].dispose()
+          if (win[slot] && (win[slot].owner !== options.owner || win[slot].engine !== pixi)) win[slot].dispose()
           if (!win[slot]) install(win, pixi)
           const state = win[slot]
+          state.ensureHooks()
           state.updateStrings(options.strings)
           state.enabled = options.enabled !== false
           if (command === 'test') state.testUntil = Date.now() + 3000
@@ -41,7 +42,9 @@ function runInGameFrames(command, options) {
 
   function install(win, pixi) {
     const doc = win.document
-    const patches = []
+    const patches = new Map()
+    const renderers = new Set()
+    const rendering = new WeakSet()
     const graphics = new Set()
     const masks = new WeakMap()
     const episodes = new WeakMap()
@@ -49,6 +52,8 @@ function runInGameFrames(command, options) {
     let disposed = false
     const state = {
       owner: options.owner,
+      engine: pixi,
+      ensureHooks,
       enabled: options.enabled !== false,
       testUntil: 0,
       renderCount: 0,
@@ -71,7 +76,7 @@ function runInGameFrames(command, options) {
       status() {
         return {
           pixiVersion: String(pixi.VERSION || 'unknown'),
-          hooks: patches.length,
+          hooks: patches.size,
           renderCount: state.renderCount,
           animationCount: state.animationCount,
           covered: state.covered,
@@ -84,7 +89,7 @@ function runInGameFrames(command, options) {
         disposed = true
         state.hide()
         if (overlay) overlay.remove()
-        for (const patch of patches) {
+        for (const patch of patches.values()) {
           // A later plugin may have wrapped our function. Its closure then
           // remains a no-op, without replacing that plugin's renderer hook.
           if (patch.proto.render === patch.wrapper) {
@@ -92,8 +97,12 @@ function runInGameFrames(command, options) {
             else delete patch.proto.render
           }
         }
-        for (const graphic of graphics) graphic.destroy()
+        for (const graphic of graphics) {
+          try { graphic.destroy() } catch (_) {}
+        }
         graphics.clear()
+        renderers.clear()
+        patches.clear()
         if (win[slot] === state) delete win[slot]
       },
     }
@@ -112,6 +121,7 @@ function runInGameFrames(command, options) {
         })
         ;(doc.body || doc.documentElement).appendChild(overlay)
       }
+      if (overlay.isConnected === false) (doc.body || doc.documentElement).appendChild(overlay)
       overlay.style.display = 'flex'
       state.covered = true
     }
@@ -207,19 +217,19 @@ function runInGameFrames(command, options) {
       return entry.graphic
     }
 
-    const prototypes = new Set()
-    for (const name of ['WebGLRenderer', 'CanvasRenderer', 'Renderer']) {
-      const proto = pixi[name] && pixi[name].prototype
-      if (proto && typeof proto.render === 'function') prototypes.add(proto)
-    }
-    for (const proto of prototypes) {
+    function patchRenderer(proto) {
+      const current = patches.get(proto)
+      if (current && proto.render === current.wrapper) return
       const original = proto.render
       const own = Object.getOwnPropertyDescriptor(proto, 'render')
       function wrappedRender(root, renderTexture) {
         // Leave texture preparation and other offscreen renders untouched.
-        if (disposed || renderTexture || !this.view || this.view.ownerDocument !== doc) {
+        // Repaired hooks may wrap a later plugin that still calls our old hook.
+        if (disposed || rendering.has(this) || renderTexture || !this.view || this.view.ownerDocument !== doc) {
           return original.apply(this, arguments)
         }
+        renderers.add(this)
+        rendering.add(this)
         state.renderCount++
         let cover = false
         try {
@@ -240,18 +250,37 @@ function runInGameFrames(command, options) {
         try {
           return original.apply(this, arguments)
         } finally {
-          if (cover) {
-            try {
-              original.call(this, maskFor(this), null, true)
-            } catch (error) {
-              state.error = state.strings.canvasOverlayErrorPrefix + String(error && error.message || error)
+          try {
+            if (cover) {
+              try {
+                original.call(this, maskFor(this), null, true)
+              } catch (error) {
+                state.error = state.strings.canvasOverlayErrorPrefix + String(error && error.message || error)
+              }
             }
-          }
+          } finally { rendering.delete(this) }
         }
       }
       proto.render = wrappedRender
-      patches.push({ proto, original, wrapper: wrappedRender, own })
+      patches.set(proto, { proto, original, wrapper: wrappedRender, own })
     }
+
+    function ensureHooks() {
+      if (disposed) return
+      const prototypes = new Set()
+      for (const name of ['WebGLRenderer', 'CanvasRenderer', 'Renderer']) {
+        const proto = pixi[name] && pixi[name].prototype
+        if (proto && typeof proto.render === 'function') prototypes.add(proto)
+      }
+      for (const proto of prototypes) patchRenderer(proto)
+      for (const renderer of renderers) {
+        if (!renderer.view) { renderers.delete(renderer); patches.delete(renderer); continue }
+        if (Object.prototype.hasOwnProperty.call(renderer, 'render') && typeof renderer.render === 'function') {
+          patchRenderer(renderer)
+        }
+      }
+    }
+    ensureHooks()
     win[slot] = state
   }
 

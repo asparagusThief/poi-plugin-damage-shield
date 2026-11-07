@@ -6,6 +6,7 @@
   "waitingForGame": "게임 화면 대기 중",
   "waitingForLoad": "게임 로딩 대기 중",
   "waitingWithError": "게임 화면 대기 중: {{error}}",
+  "connectionTimeout": "게임 화면이 응답하지 않습니다. 플러그인 또는 게임 페이지를 다시 불러오세요.",
   "detectionError": "감지 오류: {{error}}",
   "covering": "게임 화면을 가리는 중",
   "running": "자동 가리기 작동 중",

@@ -1,7 +1,7 @@
 'use strict'
 
 const english = require('../i18n/en-US.json')
-const namespace = 'damage-shield'
+const namespace = require('../package.json').poiPlugin.id
 
 function translate(t, key, values = {}) {
   return t(key, { defaultValue: english[key] || key, ...values })

@@ -1,7 +1,9 @@
 'use strict'
 
 const { runInGameFrames } = require('./game-shield')
+// Preserve the saved shielding preference independently of poi's display ID.
 const settingPath = 'plugin.damage-shield.shieldEnabled'
+const responseTimeout = 10000
 
 class ShieldController {
   constructor({ getStore, config, store, getStrings = () => ({}), clock = globalThis }) {
@@ -10,8 +12,9 @@ class ShieldController {
     this.store = store
     this.getStrings = getStrings
     this.clock = clock
+    this.now = typeof clock.now === 'function' ? () => clock.now() : Date.now
     this.owner = `damage-shield-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    this.epoch = 0
+    this.connectionSequence = 0
     this.enabled = config.get(settingPath, true)
     this.running = false
     this.view = null
@@ -77,7 +80,6 @@ class ShieldController {
     this.unbindView()
     for (const entry of this.targets.values()) this.retire(entry)
     this.targets.clear()
-    this.epoch++
     this.view = view
     this.publish({ messageKey: 'waitingForGame', frames: [], canTest: false })
     if (view && view.addEventListener) {
@@ -111,13 +113,22 @@ class ShieldController {
       [{ key: view, execute: script => view.executeJavaScript(script), singleFrame: false }] : []
   }
 
+  isTimedOut(entry) {
+    return entry.pendingSince != null && this.now() - entry.pendingSince >= responseTimeout
+  }
+
   publishFrames() {
-    const frames = Array.from(this.targets.values()).flatMap(entry => entry.frames)
+    const entries = Array.from(this.targets.values())
+    const timedOut = entries.filter(entry => this.isTimedOut(entry))
+    const frames = entries.filter(entry => !this.isTimedOut(entry)).flatMap(entry => entry.frames)
     const ready = frames.filter(frame => frame.hooks > 0)
     const canTest = ready.some(frame => frame.renderCount > 0)
     const error = ready.find(frame => frame.error) || (!ready.length && frames.find(frame => frame.error))
     let messageKey = this.view ? 'waitingForLoad' : 'waitingForGame'
     if (error) messageKey = 'detectionError'
+    else if (timedOut.some(entry => entry.frames.some(frame => frame.hooks > 0)) || (!ready.length && timedOut.length)) {
+      messageKey = 'connectionTimeout'
+    }
     else if (ready.length) {
       messageKey = ready.some(frame => frame.covered) ? 'covering' :
         ready.some(frame => frame.animationCount > 0) ? 'running' :
@@ -136,15 +147,21 @@ class ShieldController {
       return entry.pending
     }
     const current = () => this.running && this.targets.get(entry.key) === entry
+    entry.pendingSince = this.now()
     const task = (async () => {
       try {
         const frames = await entry.execute(this.script(command, entry.owner, entry.singleFrame))
+        entry.pendingSince = null
         if (!current()) return
         entry.frames = Array.isArray(frames) ? frames : []
         // Publish each frame as it responds, without waiting for unrelated ones.
         this.publishFrames()
-      } catch (_) {
-        if (current()) { entry.frames = []; this.publishFrames() }
+      } catch (error) {
+        entry.pendingSince = null
+        if (current()) {
+          entry.frames = [{ error: String(error && error.message || error) }]
+          this.publishFrames()
+        }
       }
     })()
     entry.pending = task
@@ -178,13 +195,13 @@ class ShieldController {
     for (const descriptor of descriptors) {
       if (!this.targets.has(descriptor.key)) {
         this.targets.set(descriptor.key, { ...descriptor, frames: [], pending: null,
-          owner: `${this.owner}-${this.epoch}` })
+          owner: `${this.owner}-${++this.connectionSequence}` })
         changed = true
       }
     }
     if (!descriptors.length) {
       this.publish({ messageKey: 'waitingForGame', frames: [], canTest: false })
-    } else if (changed) this.publishFrames()
+    } else if (changed || Array.from(this.targets.values()).some(entry => this.isTimedOut(entry))) this.publishFrames()
     const jobs = []
     for (const entry of this.targets.values()) {
       // A manual test is meaningful only in the game frames we have connected.

@@ -6,6 +6,7 @@
   "waitingForGame": "等待遊戲畫面",
   "waitingForLoad": "等待遊戲載入",
   "waitingWithError": "等待遊戲畫面：{{error}}",
+  "connectionTimeout": "遊戲畫面連線沒有回應，請重新載入外掛或遊戲頁面。",
   "detectionError": "偵測異常：{{error}}",
   "covering": "正在遮擋遊戲畫面",
   "running": "自動遮擋執行中",

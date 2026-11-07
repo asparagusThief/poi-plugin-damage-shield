@@ -4,7 +4,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { namespace, translate, overlayStrings } = require('../src/i18n')
 const { languages, bundles, createI18n } = require('./helpers/locales')
-const meta = require('../package.json').poiPlugin
+const pkg = require('../package.json')
+const meta = pkg.poiPlugin
 
 test('all five poi locales contain the same complete translations and interpolation variables', () => {
   const english = bundles['en-US']
@@ -38,4 +39,21 @@ test('English defaults remain readable when poi uses an unsupported locale', () 
   assert.equal(translate(t, 'ready'), 'Automatic shielding is ready')
   assert.equal(translate(t, 'recognizedCount', { count: 0 }), 'Damage animations detected this session: 0.')
   assert.equal(overlayStrings(i18n).overlayText, 'Animation playing')
+})
+
+test('selecting the plugin by ID gives poi the matching header name and icon in every language', () => {
+  for (const language of languages) {
+    const i18n = createI18n(language)
+    const previous = { packageName: 'poi-plugin-other', id: 'poi-plugin-other', name: 'Other plugin', displayIcon: 'other' }
+    const plugin = { ...meta, packageName: pkg.name,
+      name: i18n.t(`${meta.id}:${meta.name}`), displayIcon: meta.icon }
+    // poi 12.0.1 selects tabs by plugin.id, then looks up the header by packageName.
+    const selectedTab = plugin.id
+    const plugins = [previous, plugin]
+    const header = plugins.find(p => p.packageName === selectedTab) || plugins[0]
+    assert.equal(header, plugin)
+    assert.equal(header.name, bundles[language][meta.name])
+    assert.equal(header.displayIcon, 'fa/shield')
+    assert.equal(namespace, meta.id)
+  }
 })

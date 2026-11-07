@@ -6,6 +6,7 @@
   "waitingForGame": "Waiting for the game screen",
   "waitingForLoad": "Waiting for the game to load",
   "waitingWithError": "Waiting for the game screen: {{error}}",
+  "connectionTimeout": "The game screen is not responding. Reload the plugin or the game page.",
   "detectionError": "Detection error: {{error}}",
   "covering": "Covering the game screen",
   "running": "Automatic shielding is active",

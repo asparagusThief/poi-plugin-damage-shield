@@ -6,6 +6,7 @@
   "waitingForGame": "ゲーム画面を待機中",
   "waitingForLoad": "ゲームの読み込みを待機中",
   "waitingWithError": "ゲーム画面を待機中：{{error}}",
+  "connectionTimeout": "ゲーム画面から応答がありません。プラグインまたはゲームページを再読み込みしてください。",
   "detectionError": "検出エラー：{{error}}",
   "covering": "ゲーム画面をマスク中",
   "running": "自動マスク動作中",

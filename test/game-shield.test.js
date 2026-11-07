@@ -9,8 +9,8 @@ function environment() {
   const elements = []
   const doc = {
     querySelector: selector => selector === 'canvas' ? {} : null,
-    createElement: () => ({ style: {}, setAttribute() {}, remove() { this.removed = true } }),
-    body: { appendChild: el => elements.push(el) },
+    createElement: () => ({ style: {}, isConnected: false, setAttribute() {}, remove() { this.removed = true; this.isConnected = false } }),
+    body: { appendChild: el => { el.isConnected = true; elements.push(el) } },
   }
   class Container {
     constructor() { this.children = []; this.visible = true; this.renderable = true; this.alpha = 1 }
@@ -278,4 +278,95 @@ test('canvas failure diagnostics use the current localized labels', () => {
   renderer.width = 0
   renderer.render(stage)
   assert.equal(env.run()[0].error, 'キャンバスのマスクに失敗しました：ゲームのキャンバスサイズを取得できません')
+})
+
+test('repairs a renderer hook overwritten after the plugin was already ready', () => {
+  const env = environment(), original = env.Renderer.prototype.render
+  env.run()
+  const renderer = new env.Renderer(), stage = new env.Container()
+  renderer.render(stage)
+  env.Renderer.prototype.render = original
+  env.run('test')
+  renderer.draws.length = 0
+  renderer.render(stage)
+  assert.equal(renderer.draws.length, 2)
+  assert.equal(env.run()[0].covered, true)
+  assert.equal(env.elements[0].style.display, 'flex')
+})
+
+test('discovers renderer constructors that become available after PIXI', () => {
+  const env = environment()
+  delete env.pixi.WebGLRenderer
+  assert.equal(env.run()[0].hooks, 0)
+  env.pixi.WebGLRenderer = env.Renderer
+  assert.ok(env.run('test')[0].hooks > 0)
+  const renderer = new env.Renderer()
+  renderer.render(new env.Container())
+  assert.equal(renderer.draws.length, 2)
+})
+
+test('reconnects when a running page replaces its PIXI engine', () => {
+  const env = environment(), original = env.Renderer.prototype.render
+  env.run()
+  const oldRenderer = new env.Renderer()
+  oldRenderer.render(new env.Container())
+  class NewRenderer extends env.Renderer {}
+  NewRenderer.prototype.render = original
+  env.win.PIXI = { ...env.pixi, WebGLRenderer: NewRenderer }
+  env.run('test')
+  const renderer = new NewRenderer()
+  renderer.render(new env.Container())
+  assert.equal(renderer.draws.length, 2)
+  assert.equal(env.run()[0].covered, true)
+})
+
+test('repairing around a later plugin wrapper does not duplicate draws or hide an active shield', () => {
+  const env = environment()
+  env.run()
+  const firstHook = env.Renderer.prototype.render
+  function laterHook() { return firstHook.apply(this, arguments) }
+  env.Renderer.prototype.render = laterHook
+  env.run()
+  const renderer = new env.Renderer(), stage = new env.Container()
+  stage.addChild(env.damageView())
+  renderer.render(stage)
+  const status = env.run()[0]
+  assert.equal(renderer.draws.length, 2)
+  assert.equal(status.renderCount, 1)
+  assert.equal(status.animationCount, 1)
+  assert.equal(status.covered, true)
+  env.run('dispose')
+  assert.equal(env.Renderer.prototype.render, laterHook)
+  renderer.draws.length = 0
+  renderer.render(stage)
+  assert.equal(renderer.draws.length, 1)
+})
+
+test('repairs an existing renderer instance whose render method is replaced', () => {
+  const env = environment(), original = env.Renderer.prototype.render
+  env.run()
+  const renderer = new env.Renderer(), stage = new env.Container()
+  renderer.render(stage)
+  renderer.render = original
+  env.run('test')
+  renderer.draws.length = 0
+  renderer.render(stage)
+  assert.equal(renderer.draws.length, 2)
+  assert.equal(env.run()[0].covered, true)
+  env.run('dispose')
+  assert.equal(renderer.render, original)
+})
+
+test('reattaches an overlay removed by the game page while an animation is playing', () => {
+  const env = environment()
+  env.run()
+  const renderer = new env.Renderer(), stage = new env.Container()
+  stage.addChild(env.damageView())
+  renderer.render(stage)
+  const overlay = env.elements[0]
+  overlay.remove()
+  renderer.render(stage)
+  assert.equal(overlay.isConnected, true)
+  assert.equal(overlay.style.display, 'flex')
+  assert.equal(renderer.draws.at(-1).root.opacity, 1)
 })

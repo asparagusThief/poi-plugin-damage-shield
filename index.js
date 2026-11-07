@@ -10,24 +10,41 @@ let onLanguageChanged = null
 const subscribers = new Set()
 let latest = { messageKey: 'starting', frames: [], enabled: true, canTest: false }
 
+function migratePoiPreferences(config) {
+  const keys = ['poi.plugin.windowmode', 'poi.plugin.pin', 'poi.plugin.favorite']
+    .map(prefix => [`${prefix}.damage-shield`, `${prefix}.${namespace}`])
+  keys.push(['plugin.damage-shield.bounds', `plugin.${namespace}.bounds`])
+  for (const [oldKey, newKey] of keys) {
+    const value = config.get(oldKey)
+    if (value !== undefined && config.get(newKey) === undefined) config.set(newKey, value)
+  }
+}
+
 exports.pluginDidLoad = function pluginDidLoad() {
   if (controller) return
   const { getStore, store } = require('views/create-store')
   const { config } = require('views/env')
+  migratePoiPreferences(config)
   const i18nModule = require('views/env-parts/i18next')
-  poiI18n = i18nModule.default || i18nModule
-  controller = new ShieldController({ getStore, config, store, getStrings: () => overlayStrings(poiI18n) })
+  const i18n = i18nModule.default || i18nModule
+  poiI18n = i18n
+  controller = new ShieldController({ getStore, config, store, getStrings: () => overlayStrings(i18n) })
   controller.subscribe(snapshot => {
     latest = snapshot
     for (const listener of subscribers) listener(snapshot)
   })
   onLanguageChanged = () => controller && controller.refresh('sync-now')
   poiI18n.on('languageChanged', onLanguageChanged)
+  // poi can cancel beforeunload to show its exit confirmation. Keep shielding
+  // until the host really unloads or explicitly disables the plugin.
+  if (typeof window !== 'undefined') window.addEventListener('unload', exports.pluginWillUnload)
   controller.start()
 }
 
 exports.pluginWillUnload = function pluginWillUnload() {
+  if (typeof window !== 'undefined') window.removeEventListener('unload', exports.pluginWillUnload)
   if (poiI18n && onLanguageChanged) poiI18n.off('languageChanged', onLanguageChanged)
+  poiI18n = null
   onLanguageChanged = null
   if (controller) controller.stop().catch(error => console.error('[damage-shield]', error))
   controller = null

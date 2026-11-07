@@ -6,11 +6,11 @@ const vm = require('node:vm')
 const { ShieldController } = require('../src/controller')
 
 function fixture() {
-  let current = null, tick
+  let current = null, tick, time = 0
   const values = new Map()
   const config = { get: (key, fallback) => values.has(key) ? values.get(key) : fallback,
     set: (key, value) => values.set(key, value) }
-  const clock = { setInterval: fn => { tick = fn; return 7 }, clearInterval: id => { assert.equal(id, 7); tick = null } }
+  const clock = { now: () => time, setInterval: fn => { tick = fn; return 7 }, clearInterval: id => { assert.equal(id, 7); tick = null } }
   const controller = new ShieldController({ config, clock, getStore: () => current })
   const view = {
     calls: [], handlers: new Map(),
@@ -22,7 +22,7 @@ function fixture() {
       return [{ hooks: 2, renderCount: 60, animationCount: 0, covered: false }]
     },
   }
-  return { controller, view, values, setView: value => { current = value }, tick: () => tick && tick() }
+  return { controller, view, values, setView: value => { current = value }, advance: ms => { time += ms }, tick: () => tick && tick() }
 }
 
 test('waits for a game, injects after its webview appears, and reports actual renderer readiness', async () => {
@@ -189,4 +189,85 @@ test('store ref changes connect immediately and polling slows only after a rende
   assert.equal(delays.at(-1), 1000)
   await controller.stop()
   assert.equal(unsubscribed, true)
+})
+
+test('a stalled game connection stops reporting ready and recovers when it responds', async () => {
+  const f = fixture()
+  f.setView(f.view); f.controller.start()
+  await f.controller.pending
+  let finish
+  f.view.executeJavaScript = script => {
+    f.view.calls.push(script)
+    return script.includes(')("dispose",') ? Promise.resolve([]) : new Promise(resolve => { finish = resolve })
+  }
+  const pending = f.tick()
+  const callCount = f.view.calls.length
+  f.advance(10001)
+  await f.tick(); await f.tick()
+  assert.equal(f.controller.snapshot.messageKey, 'connectionTimeout')
+  assert.equal(f.controller.snapshot.canTest, false)
+  assert.equal(f.view.calls.length, callCount)
+  finish([{ hooks: 2, renderCount: 65, animationCount: 0, covered: false }])
+  await pending
+  assert.equal(f.controller.snapshot.messageKey, 'ready')
+  assert.equal(f.controller.snapshot.canTest, true)
+  await f.controller.stop()
+})
+
+test('a stalled unrelated frame does not mark a responding game as disconnected', async () => {
+  const f = fixture()
+  let finishAd
+  const ad = { executeJavaScript: script => script.includes(')("dispose",') ? Promise.resolve([]) : new Promise(resolve => { finishAd = resolve }) }
+  const game = { executeJavaScript: async () => [{ hooks: 2, renderCount: 20, covered: false }] }
+  f.view.getWebContents = () => ({ mainFrame: { framesInSubtree: [ad, game] } })
+  f.setView(f.view); f.controller.start()
+  await new Promise(setImmediate)
+  f.advance(20000)
+  const polling = f.tick()
+  await new Promise(setImmediate)
+  assert.equal(f.controller.snapshot.messageKey, 'ready')
+  assert.equal(f.controller.snapshot.canTest, true)
+  finishAd([])
+  await polling
+  await f.controller.stop()
+})
+
+test('connection exceptions are visible and the next successful poll clears them', async () => {
+  const f = fixture()
+  f.view.executeJavaScript = () => { throw new Error('Frame was detached') }
+  f.setView(f.view); f.controller.start()
+  await f.controller.pending
+  assert.equal(f.controller.snapshot.messageKey, 'detectionError')
+  assert.match(f.controller.snapshot.messageParams.error, /Frame was detached/)
+  assert.equal(f.controller.snapshot.canTest, false)
+  f.view.executeJavaScript = async () => [{ hooks: 2, renderCount: 5 }]
+  await f.tick()
+  assert.equal(f.controller.snapshot.messageKey, 'ready')
+  await f.controller.stop()
+})
+
+test('reconnecting the same native frame gives delayed cleanup a distinct owner', async () => {
+  const f = fixture()
+  let finishOld
+  const calls = []
+  const game = { executeJavaScript(script) {
+    calls.push(script)
+    if (script.includes(')("dispose",')) return Promise.resolve([])
+    if (calls.length === 1) return new Promise(resolve => { finishOld = resolve })
+    return Promise.resolve([{ hooks: 2, renderCount: 5 }])
+  } }
+  const root = { framesInSubtree: [game] }
+  f.view.getWebContents = () => ({ mainFrame: root })
+  f.setView(f.view); f.controller.start()
+  root.framesInSubtree = []
+  await f.tick()
+  root.framesInSubtree = [game]
+  await f.tick()
+  const owner = script => script.match(/"owner":"([^"]+)"/)[1]
+  assert.notEqual(owner(calls[0]), owner(calls[1]))
+  finishOld([])
+  await new Promise(setImmediate)
+  assert.equal(owner(calls[2]), owner(calls[0]))
+  assert.equal(f.controller.snapshot.messageKey, 'ready')
+  await f.controller.stop()
 })

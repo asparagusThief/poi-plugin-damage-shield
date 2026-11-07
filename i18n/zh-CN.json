@@ -6,6 +6,7 @@
   "waitingForGame": "等待游戏画面",
   "waitingForLoad": "等待游戏加载",
   "waitingWithError": "等待游戏画面：{{error}}",
+  "connectionTimeout": "游戏画面连接无响应，请重新加载插件或游戏页面。",
   "detectionError": "检测异常：{{error}}",
   "covering": "正在遮挡游戏画面",
   "running": "自动遮挡运行中",
